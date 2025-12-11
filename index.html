@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>As Aventuras de Sicenti</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            /* Céu azul */
+            font-family: 'Fredoka', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 1280px;
+            max-height: 720px;
+            overflow: hidden;
+            background-color: #fff;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        h1 {
+            color: #ff6b6b;
+            text-shadow: 2px 2px #fff;
+            margin: 0;
+            font-size: 2rem;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 10px 20px;
+            border-radius: 15px;
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .btn {
+            background: #4ecdc4;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            border-radius: 50px;
+            cursor: pointer;
+            font-family: 'Fredoka', sans-serif;
+            box-shadow: 0 4px #2cb5ac;
+            transition: transform 0.1s;
+        }
+
+        .btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 #2cb5ac;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="game-container">
+        <div id="ui-layer">
+            <h1>Aventuras de Sicenti</h1>
+        </div>
+
+        <div id="start-screen">
+            <h1 style="margin-bottom: 20px; font-size: 3rem;">Vamos Brincar?</h1>
+            <button class="btn" id="start-btn">Começar!</button>
+            <p style="margin-top: 20px; color: #666;">Pressione ESPAÇO ou toque na tela para pular!</p>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- Audio -->
+    <audio id="collision-sound" src="pedobateu.mp3"></audio>
+    <audio id="jump-sound" src="Pulo.mp3"></audio>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('start-screen');
+        const startBtn = document.getElementById('start-btn');
+        const collisionSound = document.getElementById('collision-sound');
+        const jumpSound = document.getElementById('jump-sound');
+
+        // Make canvas responsive
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            groundY = canvas.height - 150; // Ground level - adjusted for background's floor
+        }
+
+        // Game global variables
+        let frames = 0;
+        let groundY;
+        let gameSpeed = 3.0; // Faster dinosaurs, slow motion jump
+        let isGameRunning = false;
+        let isPaused = false;
+
+        // Assets objects (will interpret placeholders if images fail, but we'll try to load them)
+        const images = {
+            player: new Image(),
+            obstacle: new Image(),
+            bg: new Image()
+        };
+
+        // Paths based on your file list
+        // Using final images with proper transparency
+        images.player.src = 'sicenti_final.png';
+        images.obstacle.src = 'dino_final.png';
+        images.bg.src = 'bg_seamless.png'; // New seamless background
+
+        // Processed images with transparent backgrounds
+        const processedImages = {
+            player: null,
+            obstacle: null
+        };
+
+        // Function to remove white/gray checkerboard background from images
+        function removeBackground(img, callback) {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = img.naturalWidth;
+            tempCanvas.height = img.naturalHeight;
+            tempCtx.drawImage(img, 0, 0);
+
+            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imageData.data;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                // Remove white backgrounds (RGB close to 255,255,255)
+                if (r > 240 && g > 240 && b > 240) {
+                    data[i + 3] = 0; // Make transparent
+                }
+                // Remove light gray checkerboard (around 200-220)
+                else if (r > 195 && r < 225 && g > 195 && g < 225 && b > 195 && b < 225) {
+                    data[i + 3] = 0; // Make transparent
+                }
+                // Remove darker gray checkerboard (around 170-195)
+                else if (r > 165 && r < 200 && g > 165 && g < 200 && b > 165 && b < 200 &&
+                    Math.abs(r - g) < 10 && Math.abs(g - b) < 10) {
+                    data[i + 3] = 0; // Make transparent
+                }
+            }
+
+            tempCtx.putImageData(imageData, 0, 0);
+            callback(tempCanvas);
+        }
+
+        // Process images when loaded
+        images.player.onload = function () {
+            removeBackground(images.player, function (canvas) {
+                processedImages.player = canvas;
+            });
+        };
+        images.obstacle.onload = function () {
+            removeBackground(images.obstacle, function (canvas) {
+                processedImages.obstacle = canvas;
+            });
+        };
+
+        // Game Objects
+        const player = {
+            x: 100,
+            y: 0,
+            width: 300, // Large size for kids
+            height: 300, // Large size for kids
+            vy: 0,
+            gravity: 0.005, // Almost zero - super slow motion float!
+            jumpForce: -8, // Stronger push for higher jump
+            isJumping: false,
+            trotTimer: 0,
+            trotOffset: 0,
+            visible: true,
+            topPauseTimer: 0, // Timer for pause at top
+            topPauseDuration: 12, // ~0.2 seconds at 60fps
+            draw: function () {
+                if (!this.visible) return;
+
+                // Trot animation (automatic small jumps/bobbing)
+                if (!this.isJumping) {
+                    this.trotTimer += 0.15;
+                    this.trotOffset = Math.sin(this.trotTimer) * 5; // Bob up and down 5px
+                } else {
+                    this.trotOffset = 0;
+                }
+
+                let drawY = this.y - this.trotOffset;
+
+                // Calculate shadow properties based on height
+                let groundLevel = groundY - 10; // Where the shadow sits
+                let heightFromGround = groundLevel - (drawY + this.height);
+                let maxJumpHeight = groundY - 100; // Approximate max jump height
+
+                // Shadow size: bigger when on ground, smaller when high up
+                let shadowScale = Math.max(0.3, 1 - (heightFromGround / maxJumpHeight) * 0.7);
+
+                // Shadow also pulses with trot animation when on ground
+                let trotPulse = 1;
+                if (!this.isJumping) {
+                    trotPulse = 1 + Math.sin(this.trotTimer) * 0.1; // 10% size variation
+                }
+
+                let shadowWidth = this.width * 0.6 * shadowScale * trotPulse;
+                let shadowHeight = 20 * shadowScale * trotPulse;
+                let shadowX = this.x + (this.width - shadowWidth) / 2;
+                let shadowY = groundLevel - shadowHeight / 2;
+
+                // Draw shadow (ellipse)
+                ctx.save();
+                ctx.globalAlpha = 0.3 * shadowScale; // Fade shadow when high
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.ellipse(shadowX + shadowWidth / 2, shadowY, shadowWidth / 2, shadowHeight / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                // Draw player image or fallback
+                if (processedImages.player) {
+                    // Use processed image with transparent background
+                    ctx.drawImage(processedImages.player, this.x, drawY + 55, this.width, this.height);
+                } else if (images.player.complete && images.player.naturalWidth !== 0) {
+                    // Fallback to original while processing
+                    ctx.drawImage(images.player, this.x, drawY + 55, this.width, this.height);
+                } else {
+                    ctx.fillStyle = 'blue';
+                    ctx.fillRect(this.x, drawY, this.width, this.height);
+                    ctx.fillStyle = 'white';
+                    ctx.fillText("Sicenti", this.x + 10, drawY + 20);
+                }
+            },
+            update: function () {
+                // Handle pause at top
+                if (this.topPauseTimer > 0) {
+                    this.topPauseTimer--;
+                    return; // Don't apply physics while paused at top
+                }
+
+                // Physics
+                this.y += this.vy;
+
+                // Keep player on screen - pause at top then smooth arc down
+                if (this.y < 50) {
+                    this.y = 50;
+                    if (this.vy < 0) {
+                        // Just reached the top - start pause timer
+                        this.topPauseTimer = this.topPauseDuration;
+                        this.vy = 0;
+                    }
+                }
+
+                // Gravity
+                if (this.y + this.height < groundY) {
+                    this.vy += this.gravity;
+                    this.isJumping = true;
+                } else {
+                    this.vy = 0;
+                    this.y = groundY - this.height;
+                    this.isJumping = false;
+                }
+            },
+            jump: function () {
+                if (!this.isJumping) {
+                    this.vy = this.jumpForce;
+                    this.isJumping = true;
+                    // Play jump sound
+                    jumpSound.currentTime = 0;
+                    jumpSound.play().catch(e => console.log("Jump audio play failed:", e));
+                }
+            }
+        };
+
+        const obstacles = {
+            list: [],
+            spawnTimer: 0,
+            spawnInterval: 500, // Very long interval between dinosaurs
+            draw: function () {
+                for (let obs of this.list) {
+                    // Draw shadow for dinosaur
+                    let shadowGroundLevel = groundY - 10; // Same offset as player shadow
+                    let shadowWidth = obs.width * 0.6;
+                    let shadowHeight = 15;
+                    let shadowX = obs.x + (obs.width - shadowWidth) / 2;
+                    let shadowY = shadowGroundLevel - shadowHeight / 2;
+
+                    ctx.save();
+                    ctx.globalAlpha = 0.3;
+                    ctx.fillStyle = '#000';
+                    ctx.beginPath();
+                    ctx.ellipse(shadowX + shadowWidth / 2, shadowY, shadowWidth / 2, shadowHeight / 2, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+
+                    // Draw dinosaur
+                    if (processedImages.obstacle) {
+                        // Use processed image with transparent background
+                        ctx.drawImage(processedImages.obstacle, obs.x, obs.y, obs.width, obs.height);
+                    } else if (images.obstacle.complete && images.obstacle.naturalWidth !== 0) {
+                        ctx.drawImage(images.obstacle, obs.x, obs.y, obs.width, obs.height);
+                    } else {
+                        ctx.fillStyle = '#ff6b6b';
+                        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                    }
+                }
+            },
+            update: function () {
+                if (frames % this.spawnInterval === 0) {
+                    // Randomize interval slightly? for now constant ease
+                    this.list.push({
+                        x: canvas.width,
+                        y: groundY - 80, // Good size dinosaurs
+                        width: 80,
+                        height: 80,
+                        passed: false
+                    });
+                }
+
+                for (let i = 0; i < this.list.length; i++) {
+                    let obs = this.list[i];
+                    obs.x -= gameSpeed;
+
+                    // Remove if off screen
+                    if (obs.x + obs.width < 0) {
+                        this.list.splice(i, 1);
+                        i--;
+                    }
+                }
+            },
+            reset: function () {
+                this.list = [];
+                this.spawnTimer = 0;
+            }
+        };
+
+        const background = {
+            x: 0,
+            draw: function () {
+                if (images.bg.complete && images.bg.naturalWidth !== 0) {
+                    // Calculate scaled width maintaining aspect ratio
+                    let scale = canvas.height / images.bg.naturalHeight;
+                    let bgWidth = images.bg.naturalWidth * scale;
+
+                    // Calculate position for seamless loop
+                    let xPos = this.x % bgWidth;
+                    if (xPos > 0) xPos -= bgWidth;
+
+                    // Draw enough copies to cover the screen
+                    let currentX = xPos;
+                    while (currentX < canvas.width) {
+                        ctx.drawImage(images.bg, currentX, 0, bgWidth, canvas.height);
+                        currentX += bgWidth;
+                    }
+
+                } else {
+                    ctx.fillStyle = '#f0f8ff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    // Draw some clouds maybe?
+                }
+            },
+            update: function () {
+                this.x -= gameSpeed * 0.5; // Slower background
+            }
+        };
+
+        // Ground is now part of the background image, no separate layer needed
+
+        // Input
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                if (isGameRunning && !isPaused) player.jump();
+            }
+        });
+        window.addEventListener('touchstart', (e) => {
+            if (isGameRunning && !isPaused) player.jump();
+        });
+
+        startBtn.addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            startGame();
+        });
+
+        function checkCollisions() {
+            for (let obs of obstacles.list) {
+                // Simple AABB collision with large padding for very forgiving hitbox
+                let padding = 40; // Much larger padding = smaller hitbox
+                if (
+                    player.x + padding < obs.x + obs.width - padding &&
+                    player.x + player.width - padding > obs.x + padding &&
+                    player.y + padding < obs.y + obs.height - 20 &&
+                    player.y + player.height - 20 > obs.y + 20
+                ) {
+                    // Collision!
+                    handleCollision();
+                }
+            }
+        }
+
+        function handleCollision() {
+            if (isPaused) return; // Prevent multiple triggers
+
+            isPaused = true;
+
+            // Blink animation logic
+            let blinkCount = 0;
+            let blinkInterval = setInterval(() => {
+                player.visible = !player.visible;
+                blinkCount++;
+                if (blinkCount > 10) { // Safety clear
+                    // Will be cleared by audio end anyway usually
+                }
+            }, 200);
+
+            // Play sound
+            collisionSound.currentTime = 0;
+            collisionSound.play().catch(e => console.log("Audio play failed:", e));
+
+            collisionSound.onended = () => {
+                clearInterval(blinkInterval);
+                player.visible = true; // Ensure visibility
+                isPaused = false;
+                // Obstacle handling: move the specific obstacle away or just give invincibility?
+                // Easiest for kids: remove the obstacles currently colliding or reset them
+                // Let's slightly bump obstacles away so we don't instantly collide again
+                obstacles.list = obstacles.list.filter(o => o.x > player.x + player.width);
+            };
+        }
+
+        function startGame() {
+            resizeCanvas();
+            obstacles.reset();
+            player.y = groundY - player.height;
+            frames = 0;
+            isGameRunning = true;
+            isPaused = false;
+            loop();
+        }
+
+        function loop() {
+            if (!isGameRunning) return;
+            requestAnimationFrame(loop);
+
+            if (!isPaused) {
+                frames++;
+                ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear
+
+                // Update
+                background.update();
+                player.update();
+                obstacles.update();
+                checkCollisions();
+            } else {
+                // Even if paused, we might want to keep drawing so it doesn't disappear
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // Just draw without update
+            }
+
+            // Draw everything
+            background.draw();
+            player.draw();
+            obstacles.draw();
+        }
+
+        // Initial setup
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+    </script>
+
+</body>
+
+</html>

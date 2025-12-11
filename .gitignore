@@ -1,0 +1,36 @@
+# Backup files
+*.bak
+*~
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Unused versions (keep only production files)
+index_v1.html
+index_v2.html
+
+# Unused assets (not used in final game)
+"Imagem do WhatsApp de 2025-09-14 à(s) 17.59.15_e1d707f9.jpg"
+"E euuuu.opus"
+eeu.mp3
+pedobateu2.mp3
+"pedobateu.waptt (online-audio-converter.com).mp3"
+pedobateu.waptt.opus
+dino.png
+dino_clean.png
+dino_transparent.png
+dino-removebg-preview.png
+cute_dino.png
+sicenti.png
+sicenti_clean.png
+sicenti_original_clean.png
+sicenti_pixelart.png
+sicenti_transparent.png
+Sicentitransparente.png
+bg.png
+game_bg.png
+game_bg-removebg-preview.png
+playground_bg.png
+playground_bg_user.png
+"demonstracao linha.png"

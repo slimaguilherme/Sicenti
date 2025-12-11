@@ -137,11 +137,13 @@
         function resizeCanvas() {
             canvas.width = canvas.parentElement.clientWidth;
             canvas.height = canvas.parentElement.clientHeight;
-            groundY = canvas.height - 150; // Ground level - adjusted for background's floor
+
+            // Ground level as percentage of height (works better on different screens)
+            groundY = canvas.height * 0.78; // Ground at 78% of screen height
 
             // Calculate scale factor based on screen size (base: 1280x720)
             scaleFactor = Math.min(canvas.width / 1280, canvas.height / 720);
-            scaleFactor = Math.max(0.4, Math.min(1, scaleFactor)); // Clamp between 0.4 and 1
+            scaleFactor = Math.max(0.35, Math.min(1, scaleFactor)); // Clamp between 0.35 and 1
 
             // Update sizes if game is running
             if (isGameRunning) {
@@ -153,7 +155,7 @@
             // Scale player size
             player.width = 300 * scaleFactor;
             player.height = 300 * scaleFactor;
-            player.x = 50 + (50 * scaleFactor); // Adjust x position too
+            player.x = 30 + (70 * scaleFactor); // Adjust x position too
         }
 
         // Game global variables
@@ -257,10 +259,11 @@
 
                 let drawY = this.y - this.trotOffset;
 
-                // Calculate shadow properties based on height
-                let groundLevel = groundY - 10; // Where the shadow sits
+                // Calculate shadow properties based on height (scaled)
+                let playerOffset = 55 * scaleFactor; // Visual offset scaled
+                let groundLevel = groundY - (10 * scaleFactor); // Where the shadow sits
                 let heightFromGround = groundLevel - (drawY + this.height);
-                let maxJumpHeight = groundY - 100; // Approximate max jump height
+                let maxJumpHeight = groundY - (100 * scaleFactor); // Approximate max jump height
 
                 // Shadow size: bigger when on ground, smaller when high up
                 let shadowScale = Math.max(0.3, 1 - (heightFromGround / maxJumpHeight) * 0.7);
@@ -288,10 +291,10 @@
                 // Draw player image or fallback
                 if (processedImages.player) {
                     // Use processed image with transparent background
-                    ctx.drawImage(processedImages.player, this.x, drawY + 55, this.width, this.height);
+                    ctx.drawImage(processedImages.player, this.x, drawY + playerOffset, this.width, this.height);
                 } else if (images.player.complete && images.player.naturalWidth !== 0) {
                     // Fallback to original while processing
-                    ctx.drawImage(images.player, this.x, drawY + 55, this.width, this.height);
+                    ctx.drawImage(images.player, this.x, drawY + playerOffset, this.width, this.height);
                 } else {
                     ctx.fillStyle = 'blue';
                     ctx.fillRect(this.x, drawY, this.width, this.height);
@@ -456,13 +459,14 @@
 
         function checkCollisions() {
             for (let obs of obstacles.list) {
-                // Simple AABB collision with large padding for very forgiving hitbox
-                let padding = 40; // Much larger padding = smaller hitbox
+                // Simple AABB collision with scaled padding for forgiveness
+                let padding = 40 * scaleFactor; // Scaled padding
+                let vertPadding = 20 * scaleFactor;
                 if (
                     player.x + padding < obs.x + obs.width - padding &&
                     player.x + player.width - padding > obs.x + padding &&
-                    player.y + padding < obs.y + obs.height - 20 &&
-                    player.y + player.height - 20 > obs.y + 20
+                    player.y + padding < obs.y + obs.height - vertPadding &&
+                    player.y + player.height - vertPadding > obs.y + vertPadding
                 ) {
                     // Collision!
                     handleCollision();

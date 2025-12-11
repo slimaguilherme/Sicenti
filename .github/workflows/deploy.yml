@@ -1,0 +1,38 @@
+name: Deploy Sicenti
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: ⬇️ Checkout do Código
+      uses: actions/checkout@v4
+
+# 1 — Enviar arquivos para o servidor (sem build)
+    - name: 🚀 Enviar arquivos para o servidor
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "./"
+        target: "/tmp/sicenti"
+
+# 2 — Mover para a pasta final
+    - name: 🛠️ Mover arquivos para /var/www/html/jogos/sicenti
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          mkdir -p /var/www/html/jogos/sicenti
+          rm -rf /var/www/html/jogos/sicenti/*
+          cp -r /tmp/sicenti/* /var/www/html/jogos/sicenti/
+          rm -rf /tmp/sicenti
+          echo "Deploy do Sicenti finalizado!"

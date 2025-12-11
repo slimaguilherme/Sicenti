@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>As Aventuras de Sicenti</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
@@ -19,7 +19,13 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            height: 100dvh;
+            /* Dynamic viewport height for mobile */
             user-select: none;
+            touch-action: manipulation;
+            /* Prevent zoom on double-tap */
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         #game-container {
@@ -31,6 +37,8 @@
             overflow: hidden;
             background-color: #fff;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            touch-action: none;
+            /* Prevent scrolling/zooming in game area */
         }
 
         canvas {
@@ -124,10 +132,28 @@
         const jumpSound = document.getElementById('jump-sound');
 
         // Make canvas responsive
+        let scaleFactor = 1;
+
         function resizeCanvas() {
             canvas.width = canvas.parentElement.clientWidth;
             canvas.height = canvas.parentElement.clientHeight;
             groundY = canvas.height - 150; // Ground level - adjusted for background's floor
+
+            // Calculate scale factor based on screen size (base: 1280x720)
+            scaleFactor = Math.min(canvas.width / 1280, canvas.height / 720);
+            scaleFactor = Math.max(0.4, Math.min(1, scaleFactor)); // Clamp between 0.4 and 1
+
+            // Update sizes if game is running
+            if (isGameRunning) {
+                updateSizes();
+            }
+        }
+
+        function updateSizes() {
+            // Scale player size
+            player.width = 300 * scaleFactor;
+            player.height = 300 * scaleFactor;
+            player.x = 50 + (50 * scaleFactor); // Adjust x position too
         }
 
         // Game global variables
@@ -349,12 +375,13 @@
             },
             update: function () {
                 if (frames % this.spawnInterval === 0) {
-                    // Randomize interval slightly? for now constant ease
+                    // Responsive obstacle size
+                    let obsSize = 80 * scaleFactor;
                     this.list.push({
                         x: canvas.width,
-                        y: groundY - 80, // Good size dinosaurs
-                        width: 80,
-                        height: 80,
+                        y: groundY - obsSize,
+                        width: obsSize,
+                        height: obsSize,
                         passed: false
                     });
                 }
@@ -411,10 +438,14 @@
         // Input
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
+                e.preventDefault(); // Prevent page scroll
                 if (isGameRunning && !isPaused) player.jump();
             }
         });
+
+        // Touch controls - improved for mobile
         window.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent scrolling/zooming
             if (isGameRunning && !isPaused) player.jump();
         });
 
@@ -471,6 +502,7 @@
 
         function startGame() {
             resizeCanvas();
+            updateSizes(); // Apply responsive sizing
             obstacles.reset();
             player.y = groundY - player.height;
             frames = 0;

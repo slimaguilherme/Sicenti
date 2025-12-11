@@ -13,15 +13,16 @@ jobs:
     - name: ⬇️ Checkout do Código
       uses: actions/checkout@v4
 
-# 1 — Enviar arquivos para o servidor (sem build)
+# 1 — Enviar arquivos para o servidor
     - name: 🚀 Enviar arquivos para o servidor
       uses: appleboy/scp-action@v0.1.4
       with:
         host: ${{ secrets.SSH_HOST }}
         username: ${{ secrets.SSH_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        source: "./"
+        source: "./*"
         target: "/tmp/sicenti"
+        strip_components: 0
 
 # 2 — Mover para a pasta final
     - name: 🛠️ Mover arquivos para /var/www/html/jogos/sicenti
@@ -36,3 +37,4 @@ jobs:
           cp -r /tmp/sicenti/* /var/www/html/jogos/sicenti/
           rm -rf /tmp/sicenti
           echo "Deploy do Sicenti finalizado!"
+

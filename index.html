@@ -156,6 +156,16 @@
             player.width = 300 * scaleFactor;
             player.height = 300 * scaleFactor;
             player.x = 30 + (70 * scaleFactor); // Adjust x position too
+
+            // Adjust jump force based on aspect ratio (portrait needs less jump)
+            let aspectRatio = canvas.width / canvas.height;
+            if (aspectRatio < 1) {
+                // Portrait mode - reduce jump significantly
+                player.jumpForce = -4 * scaleFactor;
+            } else {
+                // Landscape mode
+                player.jumpForce = -8 * scaleFactor;
+            }
         }
 
         // Game global variables
@@ -349,10 +359,10 @@
             spawnInterval: 500, // Very long interval between dinosaurs
             draw: function () {
                 for (let obs of this.list) {
-                    // Draw shadow for dinosaur
-                    let shadowGroundLevel = groundY - 10; // Same offset as player shadow
+                    // Draw shadow for dinosaur (scaled)
+                    let shadowGroundLevel = groundY - (10 * scaleFactor); // Scaled offset
                     let shadowWidth = obs.width * 0.6;
-                    let shadowHeight = 15;
+                    let shadowHeight = 15 * scaleFactor;
                     let shadowX = obs.x + (obs.width - shadowWidth) / 2;
                     let shadowY = shadowGroundLevel - shadowHeight / 2;
 
@@ -450,12 +460,34 @@
         window.addEventListener('touchstart', (e) => {
             e.preventDefault(); // Prevent scrolling/zooming
             if (isGameRunning && !isPaused) player.jump();
-        });
+        }, { passive: false });
+
+        // Unlock audio for iOS/mobile (must be called on user interaction)
+        function unlockAudio() {
+            jumpSound.play().then(() => {
+                jumpSound.pause();
+                jumpSound.currentTime = 0;
+            }).catch(() => { });
+
+            collisionSound.play().then(() => {
+                collisionSound.pause();
+                collisionSound.currentTime = 0;
+            }).catch(() => { });
+        }
 
         startBtn.addEventListener('click', () => {
+            unlockAudio(); // Unlock audio on iOS
             startScreen.classList.add('hidden');
             startGame();
         });
+
+        // Also unlock on touch for mobile
+        startBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            unlockAudio();
+            startScreen.classList.add('hidden');
+            startGame();
+        }, { passive: false });
 
         function checkCollisions() {
             for (let obs of obstacles.list) {
